@@ -10,8 +10,6 @@ sys.path.append('../..')
 from dotenv import load_dotenv, find_dotenv
 _ = load_dotenv(find_dotenv()) # read local .env file
 
-openai.api_key  = os.environ['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']
-
 import datetime
 current_date = datetime.datetime.now().date()
 if current_date < datetime.date(2023, 9, 2):
@@ -24,24 +22,27 @@ from langchain_openai import ChatOpenAI
 
 llm = ChatOpenAI(openai_api_key="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")
 
-
+#%%
 llm.invoke("how can langsmith help with testing?")
 
+#import os
+#os.environ["LANGCHAIN_TRACING_V2"] = "true"
+#os.environ["LANGCHAIN_ENDPOINT"] = "https://api.langchain.plus"
+#os.environ["LANGCHAIN_API_KEY"] = "..."
 
-# %%
-
-
-from openai import OpenAI
-client = OpenAI()
-
-completion = client.chat.completions.create(
-  model="gpt-3.5-turbo",
-  messages=[
-    {"role": "system", "content": "You are a poetic assistant, skilled in explaining complex programming concepts with creative flair."},
-    {"role": "user", "content": "Compose a poem that explains the concept of recursion in programming."}
-  ]
-)
-
-print(completion.choices[0].message)
-print("hi")
 #%%
+"""load docs"""
+from langchain.document_loaders import PyPDFLoader
+
+loader = PyPDFLoader("docs/41_Pirou_hydrogen extraction.pdf")
+pages = loader.load()
+
+#%%
+"""split into chunks"""
+
+#%%
+"""convert to vectors"""
+
+#%%
+"""prompt"""
+
