@@ -1,5 +1,6 @@
 #%%
 import os
+import glob
 import openai
 import sys
 sys.path.append('../..')
@@ -68,18 +69,22 @@ def pretty_print_docs(docs):
 
 
 #%% Load docs
-"""Could loop through multiple files, just create a list containing loaders and 
-loop through it by extending docs."""
+"""loads any number of pdfs that is placed in the ./docs directory"""
 
-loader = PyPDFLoader("docs/41_Pirou_hydrogen extraction.pdf")
 
-# loading into docs
+pdf_list = glob.glob('./docs/*.pdf')
 docs = []
-docs.extend(loader.load())
+
+for pdf in pdf_list:
+    loader = PyPDFLoader(pdf)
+
+    # loading into docs
+    docs.extend(loader.load())
+
+print(f"{len(pdf_list)} file(s) were loaded into {len(docs)} pages.")
 
 # loading into text
-pages = loader.load()
-all_page_text=[p.page_content for p in pages]
+all_page_text=[page.page_content for page in docs]
 joined_page_text=" ".join(all_page_text)
 
 #%% Split into chunks
