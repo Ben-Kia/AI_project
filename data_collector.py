@@ -34,9 +34,6 @@ os.environ["OPENAI_API_KEY"] = "sk-RmQ1MnNGjurygfE6O5BuT3BlbkFJ2bHTh3cpw4WSFpZ5b
 llm = ChatOpenAI(model_name=llm_name, temperature=0)
 llm.invoke("please repeat: I am alive and well.")
 
-#os.environ["LANGCHAIN_TRACING_V2"] = "true"
-#os.environ["LANGCHAIN_ENDPOINT"] = "https://api.langchain.plus"
-#os.environ["LANGCHAIN_API_KEY"] = "..."
 
 #%%
 def check_credit_usage():
@@ -74,9 +71,6 @@ for pdf in pdf_list:
 
 print(f"{len(pdf_list)} file(s) were loaded into {len(docs)} pages.")
 
-# loading into text
-#all_page_text=[page.page_content for page in docs]
-#joined_page_text=" ".join(all_page_text)
 
 #%% Split into chunks
 splitter = RecursiveCharacterTextSplitter(
@@ -91,22 +85,12 @@ doc_splits = splitter.split_documents(docs)
 #%% Store in vectors and embed
 """here you can choose between OpenAI and HuggingFace embeddings"""
 
-"""
-embedding_function = OpenAIEmbeddings()
-"""
-
 embedding_function = HuggingFaceBgeEmbeddings(
     model_name="BAAI/bge-base-en-v1.5",
     model_kwargs={'device': 'cuda'}, # works with CUDA, too, but requires CUDA-enabled torch
     encode_kwargs={'normalize_embeddings': True},
     query_instruction="Represent this sentence for searching relevant passages: "
 )  
-"""
-tokenizer = AutoTokenizer.from_pretrained('BAAI/bge-base-en-v1.5')
-text_splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
-    tokenizer, chunk_size=100, chunk_overlap=0
-)
-"""
 
 vectordb = Chroma.from_documents(
     doc_splits,
@@ -123,22 +107,12 @@ print(vectordb._collection.count())
 
 
 
-#%% Retrieval by similarity search
+#%% 
 """filters can be applied on metadata to limit the search
 for example: fitler={"source:"path/to/source"} can be used to limit the search 
 to one specific source"""
 
-question = "list all the different protone conducting membrane configurations you find in these papers"
-
-"""
-docs_sim_retrieved = vectordb.similarity_search(question,k=3)
-print("The following were retrieved by similarity search:")
-pretty_print_docs(docs_sim_retrieved)
-
-docs_mmr_retrieved = vectordb.max_marginal_relevance_search(question,k=3, fetch_k=3)
-print("The following were retrieved by Max Marginal Relevance search:")
-pretty_print_docs(docs_mmr_retrieved)
-"""
+question = "Different combinations of sintering, reduction, and hydration were used to prepare electrolyte membranes. How long did the product of each preparation approach remained crack-free in atmospheric conditions?"
 
 #%% Retrieval using a self-query retriever
 """uses an LLM to extract the query string and the metadata filter so you don't 
@@ -176,58 +150,24 @@ retrieved_docs = retriever.get_relevant_documents(question)
 pretty_print_docs(retrieved_docs)
 
 #%%Contextual Compression
-"""when you don't want to pass a large amount of documents through the application,
-you can find the information most relevant to the query instead"""
-
-"""
-llm_compression = OpenAI(temperature=0)
-compressor = LLMChainExtractor.from_llm(llm_compression)
-
-compression_retriever = ContextualCompressionRetriever(
-    base_compressor=compressor,
-    base_retriever=vectordb.as_retriever()
-)
-
-compressed_docs = compression_retriever.get_relevant_documents(question)
-pretty_print_docs(compressed_docs)
-"""
 
 #%% Alternative retrievers
 
-"""
-docs_svm=svm_retriever.get_relevant_documents(question)
-print("docs retrieved by SVM retriever")
-pretty_print_docs(docs_svm)
-
-docs_tfidf=tfidf_retriever.get_relevant_documents(question)
-print("docs retrieved by TFIDF retriever")
-pretty_print_docs(docs_tfidf)
-"""
-
 #%% RetrievalQA Chain
-"""
-qa_chain = RetrievalQA.from_chain_type(
-    llm,
-    retriever=vectordb.as_retriever()
-)
-
-result = qa_chain({"query": question})
-
-result["result"]
-"""
 
 #%% Prompting
 
-# Build prompt
-
-
-template = """Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer. Use three sentences maximum. Keep the answer as concise as possible. Always say "thanks for asking!" at the end of the answer. 
+#Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer. Use three sentences maximum. Keep the answer as concise as possible. Always say "thanks for asking!" at the end of the answer. 
+template = """Use the following pieces of context to answer the question at the end. If you don't know the answer, just say "UNKNOWN". 
 {context}
 Question: {question}
 Helpful Answer:"""
 QA_CHAIN_PROMPT = PromptTemplate.from_template(template)
 
-# Run chain
+memory = ConversationBufferMemory(
+    memory_key="chat_history",
+    return_messages=True
+)
 
 qa_chain = RetrievalQA.from_chain_type(
     llm,
@@ -236,25 +176,8 @@ qa_chain = RetrievalQA.from_chain_type(
     chain_type_kwargs={"prompt": QA_CHAIN_PROMPT}
 )
 
-# experiment with different chain types to find the most efficient.
-"""
-qa_chain_mr = RetrievalQA.from_chain_type(
-    llm,
-    retriever=vectordb.as_retriever(),
-    chain_type="map_reduce" # "map_reduce" or "refine"
-)
-"""
-"""
-qa_chain_r = RetrievalQA.from_chain_type(
-    llm,
-    retriever=vectordb.as_retriever(),
-    chain_type="refine" # "map_reduce" or "refine"
-)
-"""
-
-result = qa_chain({"query": question}, {"context":retrieved_docs})
+result = qa_chain({"query": question})
 result["result"]
-result["source_documents"][0]
 
 #%% Adding a memory component is required to have chat functionality, otherwise, it will be a one-shot Q&A
 """
