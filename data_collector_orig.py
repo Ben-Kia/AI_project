@@ -110,8 +110,7 @@ text_splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
 
 vectordb = Chroma.from_documents(
     doc_splits,
-    embedding_function,
-    persist_directory="./chroma_db"
+    embedding_function#, persist_directory="./chroma_db"
 )
 
 print(vectordb._collection.count())

@@ -4,38 +4,26 @@ import glob
 import openai
 import sys
 sys.path.append('../..')
-
 from dotenv import load_dotenv, find_dotenv
 _ = load_dotenv(find_dotenv()) # read local .env file
-
 from langchain_openai import ChatOpenAI
 from langchain.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter, CharacterTextSplitter, MarkdownHeaderTextSplitter, TokenTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
 from langchain.embeddings import HuggingFaceBgeEmbeddings
-from langchain.llms import OpenAI
-from langchain.retrievers.self_query.base import SelfQueryRetriever
-from langchain.chains.query_constructor.base import AttributeInfo
-from langchain.retrievers import ContextualCompressionRetriever, SVMRetriever, TFIDFRetriever
-from langchain.retrievers.document_compressors import LLMChainExtractor
-from langchain.chains import RetrievalQA, ConversationalRetrievalChain
+from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
-from langchain.memory import ConversationBufferMemory
-
-from transformers import AutoTokenizer
-import numpy as np
+import csv
 
 
-#%%
-llm_name = "gpt-3.5-turbo"
-#llm = ChatOpenAI(openai_api_key="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")
-os.environ["OPENAI_API_KEY"] = "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"
-llm = ChatOpenAI(model_name=llm_name, temperature=0)
-llm.invoke("please repeat: I am alive and well.")
+def setup_llm(api_key):
+    llm_name = "gpt-3.5-turbo"
+    os.environ["OPENAI_API_KEY"] = api_key
+    llm = ChatOpenAI(model_name=llm_name, verbose=True, temperature=0)
+    llm.invoke("please repeat: I am alive and well.")
+    return llm
 
-
-#%%
 def check_credit_usage():
     try:
         # Make a request to the API
@@ -57,141 +45,122 @@ def pretty_print_docs(docs):
     print(f"\n{'-' * 100}\n".join([f"Document {i+1}:\n\n" + d.page_content for i, d in enumerate(docs)]))
 
 
-#%% Load docs
-"""loads any number of pdfs that is placed in the ./docs directory"""
+def load_pdfs(path_to_pdf=None):
+    if not path_to_pdf:
+        """loads any number of pdfs that is placed in the ./docs directory"""
+        pdf_list = glob.glob('./docs/*.pdf')
+        docs = []
 
-pdf_list = glob.glob('./docs/*.pdf')
-docs = []
+        for pdf in pdf_list:
+            loader = PyPDFLoader(pdf)
+            # loading into docs
+            docs.extend(loader.load())
 
-for pdf in pdf_list:
-    loader = PyPDFLoader(pdf)
+    else:
+        loader = PyPDFLoader(path_to_pdf)
+        docs.extend(loader.load())
+    
+    print(f"{len(pdf_list)} file(s) loaded into {len(docs)} pages.")
 
-    # loading into docs
-    docs.extend(loader.load())
-
-print(f"{len(pdf_list)} file(s) were loaded into {len(docs)} pages.")
-
-
-#%% Split into chunks
-splitter = RecursiveCharacterTextSplitter(
-    chunk_size = 1500,
-    chunk_overlap = 150,
-    separators=["\n\n", "\n", "\. ", " ", ""]
-)
-
-doc_splits = splitter.split_documents(docs)
-#text_splits = splitter.split_text(joined_page_text)
-
-#%% Store in vectors and embed
-"""here you can choose between OpenAI and HuggingFace embeddings"""
-
-embedding_function = HuggingFaceBgeEmbeddings(
-    model_name="BAAI/bge-base-en-v1.5",
-    model_kwargs={'device': 'cuda'}, # works with CUDA, too, but requires CUDA-enabled torch
-    encode_kwargs={'normalize_embeddings': True},
-    query_instruction="Represent this sentence for searching relevant passages: "
-)  
-
-vectordb = Chroma.from_documents(
-    doc_splits,
-    embedding_function,
-    persist_directory="./chroma_db"
-)
-
-print(vectordb._collection.count())
-
-"""other retrievers are also available"""
-
-#svm_retriever = SVMRetriever.from_texts(text_splits, embedding_function)
-#tfidf_retriever = TFIDFRetriever.from_texts(text_splits)
+    return docs
 
 
+def split_docs(docs):
+    """Split inputs into chunks"""
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size = 1500,
+        chunk_overlap = 150,
+        separators=["\n\n", "\n", "\. ", " ", ""]
+    )
 
-#%% 
-"""filters can be applied on metadata to limit the search
-for example: fitler={"source:"path/to/source"} can be used to limit the search 
-to one specific source"""
+    doc_splits = splitter.split_documents(docs)
+    return doc_splits
 
-question = "Different combinations of sintering, reduction, and hydration were used to prepare electrolyte membranes. How long did the product of each preparation approach remained crack-free in atmospheric conditions?"
 
-#%% Retrieval using a self-query retriever
-"""uses an LLM to extract the query string and the metadata filter so you don't 
-have to pass it manually"""
+def store(embedding, splits, device):
+    """Store embeddings into vectors. Here you can choose between OpenAI and HuggingFace embeddings"""
+    
+    if embedding == 'openai':
+        embedding_function = OpenAIEmbeddings()
 
-# do the following descriptions more specifically
+    if embedding == 'huggingface':
+        embedding_function = HuggingFaceBgeEmbeddings(
+            model_name="BAAI/bge-base-en-v1.5",
+            model_kwargs={'device': device},
+            encode_kwargs={'normalize_embeddings': True},
+            query_instruction="Represent this sentence for searching relevant passages: "
+        )
 
-metadata_field_info = [
-    AttributeInfo(
-        name="source",
-        description="Each pdf file in the ./docs directory is a scientific paper", #The lecture the chunk is from, should be one of `docs/cs229_lectures/MachineLearning-Lecture01.pdf`, `docs/cs229_lectures/MachineLearning-Lecture02.pdf`, or `docs/cs229_lectures/MachineLearning-Lecture03.pdf`",
-        type="string",
-    ),
-    AttributeInfo(
-        name="page",
-        description="The page from the paper",
-        type="integer",
-    ),
-]
+    vectordb = Chroma.from_documents(
+        splits,
+        embedding_function#, persist_directory="./chroma_db"
+    )
 
-# We could use the GPT to summarize each pdf and write an individual description.
-document_content_description = "paper on protonic ceramic cells" # do we need this argument? if so make it more specific.
+    print(f"{vectordb._collection.count()} embeddings stored")
+    return vectordb
 
-llm_self_query_ret = OpenAI(model='gpt-3.5-turbo-instruct', temperature=0) # for factual answers
 
-retriever = SelfQueryRetriever.from_llm(
-    llm_self_query_ret,
-    vectordb,
-    document_content_description,
-    metadata_field_info,
-    verbose=True
-)
+def chroma_retriever(k):
+    retriever = vectordb.as_retriever(search_type="similarity", search_kwargs={"k": k})
+    return retriever
 
-retrieved_docs = retriever.get_relevant_documents(question)
-pretty_print_docs(retrieved_docs)
+def prompt(question, template, retriever, k):
+    QA_CHAIN_PROMPT = PromptTemplate.from_template(template)
 
-#%%Contextual Compression
+    qa_chain = RetrievalQA.from_chain_type(
+        llm,
+        retriever=retriever,
+        return_source_documents=True,
+        verbose=True,
+        chain_type_kwargs={"prompt": QA_CHAIN_PROMPT}
+    )
 
-#%% Alternative retrievers
+    prompt_result = qa_chain({"query": question})
+    return prompt_result
 
-#%% RetrievalQA Chain
+def save2csv(data_string, filename):
+    lines = data_string.split('\n')
+    with open(f'{filename}.csv', 'w', newline='') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        
+        # Write header
+        header = lines[0].split(',')
+        csv_writer.writerow(header)
+        
+        # Write data
+        for line in lines[1:]:
+            row = line.split(',')
+            csv_writer.writerow(row)
+
+    print(f"CSV file saved as '{filename}.csv'")
+
+
+llm = setup_llm("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")
+docs = load_pdfs(path_to_pdf=None)
+doc_splits = split_docs(docs)
+vectordb = store('huggingface', doc_splits, device='cuda')
 
 #%% Prompting
 
+
+table_title = "Table 2 e Electrochemical performance of symmetrical PCC cells"
+
+question = f"Rewrite the information in \"{table_title}\" from the document into csv format."
+
+# "What parameters affected electrolyte membrane cracking in this paper?"
+# "How long did the elecrolyte membranes produced by different preparations stay crack-free?"
+# "What does the table titled \"Table 2 e Electrochemical performance of symmetrical PCC cells.\" contain?"
+
 #Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer. Use three sentences maximum. Keep the answer as concise as possible. Always say "thanks for asking!" at the end of the answer. 
-template = """Use the following pieces of context to answer the question at the end. If you don't know the answer, just say "UNKNOWN". 
+prompt_template = """Use the following pieces of context to answer the question at the end. You are provided with some scientific papers. If you don't know the answer, just say UNKNOWN. 
 {context}
 Question: {question}
 Helpful Answer:"""
-QA_CHAIN_PROMPT = PromptTemplate.from_template(template)
 
-memory = ConversationBufferMemory(
-    memory_key="chat_history",
-    return_messages=True
-)
+retriever = chroma_retriever(5)
 
-qa_chain = RetrievalQA.from_chain_type(
-    llm,
-    retriever=retriever,#vectordb.as_retriever(),
-    return_source_documents=True,
-    chain_type_kwargs={"prompt": QA_CHAIN_PROMPT}
-)
+result = prompt(question, prompt_template, retriever, 5)
 
-result = qa_chain({"query": question})
-result["result"]
+save2csv(result["result"], f"{table_title}")
 
-#%% Adding a memory component is required to have chat functionality, otherwise, it will be a one-shot Q&A
-"""
-memory = ConversationBufferMemory(
-    memory_key="chat_history",
-    return_messages=True
-)
-
-qa_conversational = ConversationalRetrievalChain.from_llm(
-    llm,
-    retriever=vectordb.as_retriever(),
-    memory=memory
-)
-
-result = qa_conversational({"question": question})
-result['answer']
-"""
+# %%
