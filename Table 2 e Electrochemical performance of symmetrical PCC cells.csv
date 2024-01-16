@@ -1,5 +1,6 @@
-Electrolyte, Electrode, Gas composition, Temperature (/C14C), R s(U*cm2), R p(U*cm2), Reference
-BCZY27, BCZY27-Ni, 50% H 2/50% N 2, 650, 0.59, 0.10, This work
-BCZY27, BCZY27-Ni, 50% H 2/50% N 2, 800, 0.44, 0.09, This work
-BZY20, BZY-Ni, 100% H 2, 600, 0.57, 0.14, [55]
-BCZY811, BCZY811-Ni, 20% H 2/80% Ar, 600, 1.57, 0.47, [56]
+Electrolyte,Electrode,Gas composition,Temperature (°C),R s (Ωcm2),R p (Ωcm2),Reference
+BCZY27,BCZY27-Ni,50% H2/50% N2,3% H2O,650,0.59,0.10,This work
+BCZY27,BCZY27-Ni,50% H2/50% N2,3% H2O,800,0.44,0.09,This work
+BZY20,BZY-Ni,100% H2,3% H2O,600,0.57,0.14,[55]
+BCZY811,BCZY811-Ni,20% H2/80% Ar,600,1.57,0.47,[56]
+BCZYYb,BCZYYb,50% H2/50% N2,3% H2O,600,0.30,0.08,[57]
