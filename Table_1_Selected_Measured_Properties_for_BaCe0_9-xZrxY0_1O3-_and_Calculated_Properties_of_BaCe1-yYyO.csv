@@ -1,5 +1,5 @@
-BaCe0.9-xZrxY0.1O3-δ,Measured CCE at 430 °C,Measured CCE at 630 °C,Measured CCE at 0 K, DFT
-0,0.00098,0.019,0.01269
-0.3,0.0015,0.019,UNKNOWN
-0.6,0.0091,0.023,UNKNOWN
-0.9,0.028,0.049,0.02959
+BaCe0.9-xZrxY0.1O3-δ,Measured lattice parameters (Å),Calculated lattice parameters (Å),Measured hydration enthalpy (eV),Calculated hydration enthalpy (eV),Measured bulk modulus (GPa),Calculated bulk modulus (GPa)
+x=0,5.468,5.468,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN
+x=0.9,5.468,5.468,UNKNOWN,UNKNOWN,UNKNOWN,UNKNOWN
+BaCe1-yYyO3-δ,UNKNOWN,UNKNOWN,0.06,0.06,UNKNOWN,UNKNOWN
+BaZr1-yYyO3-δ,UNKNOWN,UNKNOWN,-1.36,-1.36,UNKNOWN,UNKNOWN

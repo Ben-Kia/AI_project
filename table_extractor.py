@@ -1,5 +1,6 @@
 #%%
 import os
+import shutil
 import glob
 import openai
 import sys
@@ -76,7 +77,7 @@ def split_docs(docs, chunk_size = 1500, chunk_overlap = 150, separators=["\n\n",
     return doc_splits
 
 
-def store(embedding, splits, device):
+def store(embedding, splits, device, persist_directory="./chroma_db", purge=True):
     """Store embeddings into vectors. Here you can choose between OpenAI and HuggingFace embeddings"""
     
     if embedding == 'openai':
@@ -90,9 +91,17 @@ def store(embedding, splits, device):
             query_instruction="Represent this sentence for searching relevant passages: "
         )
 
+    if purge:
+        try:
+            shutil.rmtree(persist_directory)
+            print(f"Directory '{persist_directory}' and its contents successfully removed.")
+            
+        except OSError as e:
+            print(f"Error: {e}")
+
     vectordb = Chroma.from_documents(
         splits,
-        embedding_function#, persist_directory="./chroma_db"
+        embedding_function, persist_directory=persist_directory
     )
 
     print(f"{vectordb._collection.count()} embeddings stored")
@@ -171,13 +180,14 @@ def save2csv(data_string, filename):
 
 
 llm = setup_llm("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")
-docs = load_pdfs(path_to_pdf='./docs/backup_docs/43_Chen_hydration induced chemical expansion.pdf')#None)
+docs = load_pdfs(path_to_pdf=None) #'./docs/backup_docs/43_Chen_hydration induced chemical expansion.pdf'
+#%% 
 doc_splits = split_docs(docs, 5000, 250)
-vectordb = store('huggingface', doc_splits, device='cuda')
+vectordb = store('huggingface', doc_splits, device='cuda', purge=True)
 
 #%% Prompting
 
-table_title = ""
+table_title = "Table 2 e Electrochemical performance of symmetrical PCC cells."
 # "Table 1. Selected Measured Properties for BaCe0.9-xZrxY0.1O3-δ and Calculated Properties of BaCe1-yYyO3-δ and BaZr1-yYyO3-δa"
 # "Table 2 e Electrochemical performance of symmetrical PCC cells"
 # "Table 2. Selected Calculated Properties of BaCe1−yYyO3−δ and BaZr1−yYyO3−δ, with Previous Theoretical and Experimental\nHydration Enthalpies Shown for Comparisona"
@@ -188,13 +198,12 @@ question = f"Rewrite the information in \"{table_title}\" from the document into
 # "How long did the elecrolyte membranes produced by different preparations stay crack-free?"
 # "What does the table titled \"Table 2 e Electrochemical performance of symmetrical PCC cells.\" contain?"
 
-#Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer. Use three sentences maximum. Keep the answer as concise as possible. Always say "thanks for asking!" at the end of the answer. 
 prompt_template = """Use the following pieces of context to answer the question at the end. You are provided with scientific papers. You are not allowed to ignore any word, symbol, or number in the data. If you don't know the answer, just return UNKNOWN.
 {context}
 Question: {question}
 Helpful Answer:"""
 
-retriever = chroma_retriever("mmr", 5, 3)
+retriever = chroma_retriever("mmr", 5, 3) #similarity or mmr
 
 result = prompt(question, prompt_template, "qa", retriever)
 
