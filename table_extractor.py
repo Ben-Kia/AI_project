@@ -9,11 +9,14 @@ sys.path.append('../..')
 from dotenv import load_dotenv, find_dotenv
 _ = load_dotenv(find_dotenv()) # read local .env file
 from langchain_openai import ChatOpenAI
+from langchain.llms import OpenAI
 from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
 from langchain.embeddings import HuggingFaceBgeEmbeddings
+from langchain.retrievers.self_query.base import SelfQueryRetriever
+from langchain.chains.query_constructor.base import AttributeInfo
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 import csv
@@ -108,8 +111,35 @@ def store(embedding, splits, device, persist_directory="./chroma_db", purge=True
     return vectordb
 
 
-def chroma_retriever(search_type, k=5, fetch_k=3):
+def setup_retriever(search_type, k=5, fetch_k=3):
     
+    if search_type == "selfquery":
+        metadata_field_info = [
+        AttributeInfo(
+            name="source",
+            description="The filename corresponding to the paper this chunk is from",
+            type="string",
+        ),
+        AttributeInfo(
+            name="page",
+            description="The page from the paper",
+            type="integer",
+        ),
+        ]
+
+        # We could use the GPT to summarize each pdf and write an individual description.
+        document_content_description = "Excerpts from a scientific paper"
+
+        llm_self_query_ret = OpenAI(model='gpt-3.5-turbo-instruct', temperature=0)
+            
+        retriever = SelfQueryRetriever.from_llm(
+            llm_self_query_ret,
+            vectordb,
+            document_content_description,
+            metadata_field_info,
+            verbose=True
+        )
+
     if search_type == "similarity":
         retriever = vectordb.as_retriever(search_type="similarity", search_kwargs={"k": k})
     
@@ -177,33 +207,54 @@ def save2csv(data_string, filename):
 
     print(f"CSV file saved as '{filename}.csv'")
 
+api_key = input("please provide the api key or leave blank for the default key: ", ).strip() or "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"
+llm = setup_llm(api_key)
+
+path_to_pdf = input("please provide a path to the pdf file or put it in the ./docs directory: ")
+docs = load_pdfs(path_to_pdf) #'./docs/backup_docs/43_Chen_hydration induced chemical expansion.pdf'
+
+page_no = -1 + int(input("please specify the page where the table is located in: "))
+
+#purge the chroma directory
+shutil.rmtree('C:\codestuff\AI_project\chroma_db')
+print("chroma_db directory purged.")
 
 
-llm = setup_llm("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")
-docs = load_pdfs(path_to_pdf=None) #'./docs/backup_docs/43_Chen_hydration induced chemical expansion.pdf'
-#%% 
-doc_splits = split_docs(docs, 5000, 250)
+#%%
+doc_splits = split_docs([docs[page_no]], 10000, 250)
+
 vectordb = store('huggingface', doc_splits, device='cuda', purge=True)
 
 #%% Prompting
 
-table_title = "Table 2 e Electrochemical performance of symmetrical PCC cells."
-# "Table 1. Selected Measured Properties for BaCe0.9-xZrxY0.1O3-δ and Calculated Properties of BaCe1-yYyO3-δ and BaZr1-yYyO3-δa"
-# "Table 2 e Electrochemical performance of symmetrical PCC cells"
-# "Table 2. Selected Calculated Properties of BaCe1−yYyO3−δ and BaZr1−yYyO3−δ, with Previous Theoretical and Experimental\nHydration Enthalpies Shown for Comparisona"
+table_title = str(input("please specify the title of the table: "))
+#table_title = "Table 2 e Electrochemical performance of symmetrical PCC cells"
 
-question = f"Rewrite the information in \"{table_title}\" from the document into csv format."
+#question = f"Rewrite the information in \"{table_title}\" from the document into csv format."
+question = f"Rewrite the contents of \"{table_title}\" into csv format."
 
 # "What parameters affected electrolyte membrane cracking in this paper?"
 # "How long did the elecrolyte membranes produced by different preparations stay crack-free?"
 # "What does the table titled \"Table 2 e Electrochemical performance of symmetrical PCC cells.\" contain?"
 
-prompt_template = """Use the following pieces of context to answer the question at the end. You are provided with scientific papers. You are not allowed to ignore any word, symbol, or number in the data. If you don't know the answer, just return UNKNOWN.
+
+#prompt_template = """Use the following pieces of context to answer the question at the end. You are provided with scientific papers. You are not allowed to ignore any word, symbol, or number in the data. If you don't know the answer, just return UNKNOWN.
+#{context}
+#Question: {question}
+#Helpful Answer:"""
+
+prompt_template = """You are provided with an excerpt from a scientific paper as context.
+This piece of context contains a table.
+Rewrite the information in the specified table into csv format.
+First try to identify the table header (there might be sub-headers),
+Then identify table columns.
+You are not allowed to ignore any word, symbol, or number in the data.
+If you don't know the answer, just return UNKNOWN.
 {context}
 Question: {question}
 Helpful Answer:"""
 
-retriever = chroma_retriever("mmr", 5, 3) #similarity or mmr
+retriever = setup_retriever("mmr", 3, 1) #"selfquery", ("similarity", 3, 1) or ("mmr", 3, 1)
 
 result = prompt(question, prompt_template, "qa", retriever)
 
