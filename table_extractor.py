@@ -96,8 +96,9 @@ def store(embedding, splits, device, persist_directory="./chroma_db", purge=True
 
     if purge:
         try:
+            #shutil.rmtree('C:\codestuff\AI_project\chroma_db')
             shutil.rmtree(persist_directory)
-            print(f"Directory '{persist_directory}' and its contents successfully removed.")
+            print(f"Directory '{persist_directory}' was purged.")
             
         except OSError as e:
             print(f"Error: {e}")
@@ -215,10 +216,6 @@ docs = load_pdfs(path_to_pdf) #'./docs/backup_docs/43_Chen_hydration induced che
 
 page_no = -1 + int(input("please specify the page where the table is located in: "))
 
-#purge the chroma directory
-shutil.rmtree('C:\codestuff\AI_project\chroma_db')
-print("chroma_db directory purged.")
-
 
 #%%
 doc_splits = split_docs([docs[page_no]], 10000, 250)
@@ -228,7 +225,6 @@ vectordb = store('huggingface', doc_splits, device='cuda', purge=True)
 #%% Prompting
 
 table_title = str(input("please specify the title of the table: "))
-#table_title = "Table 2 e Electrochemical performance of symmetrical PCC cells"
 
 #question = f"Rewrite the information in \"{table_title}\" from the document into csv format."
 question = f"Rewrite the contents of \"{table_title}\" into csv format."
