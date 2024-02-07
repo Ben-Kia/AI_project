@@ -9,17 +9,22 @@ sys.path.append('../..')
 from dotenv import load_dotenv, find_dotenv
 _ = load_dotenv(find_dotenv()) # read local .env file
 from langchain_openai import ChatOpenAI
-from langchain.llms import OpenAI
-from langchain.document_loaders import PyPDFLoader
+from langchain_community.llms import OpenAI
+from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
-from langchain.embeddings import HuggingFaceBgeEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain.retrievers.self_query.base import SelfQueryRetriever
 from langchain.chains.query_constructor.base import AttributeInfo
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 import csv
+
+#from langchain.llms import OpenAI
+#from langchain.document_loaders import PyPDFLoader
+#from langchain.vectorstores import Chroma
+#from langchain.embeddings import HuggingFaceBgeEmbeddings
 
 
 def setup_llm(api_key):
