@@ -135,7 +135,7 @@ def save2csv(data_string, filename):
     print(f"CSV file saved as '{filename}.csv'")
 
 
-llm = setup_llm("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")
+llm = setup_llm()
 docs = load_pdfs(path_to_pdf=None)
 doc_splits = split_docs(docs)
 vectordb = store('huggingface', doc_splits, device='cuda')
